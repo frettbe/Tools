@@ -36,6 +36,7 @@ class FileAnalysis:
     dependencies: Set[str] = field(default_factory=set)
     loc: int = 0
     internal_deps: Set[str] = field(default_factory=set)  # Dépendances vers autres fichiers du projet
+    entry_points: List[str] = field(default_factory=list)  # Points d'entrée détectés
 
 
 class CodeAnalyzer(ast.NodeVisitor):
@@ -76,15 +77,18 @@ class CodeAnalyzer(ast.NodeVisitor):
 
     def _is_stdlib(self, module: str) -> bool:
         """Check si module est stdlib Python"""
-        stdlib = {
+        # Utilisation d'un frozenset pour les performances + mise à jour des modules
+        stdlib = frozenset({
             'os', 'sys', 'json', 'ast', 're', 'pathlib', 'collections',
             'typing', 'datetime', 'logging', 'argparse', 'configparser',
             'sqlite3', 'csv', 'io', 'math', 'random', 'time', 'unittest',
             'functools', 'itertools', 'operator', 'enum', 'dataclasses',
             'asyncio', 'threading', 'multiprocessing', 'subprocess',
-            'http', 'urllib', 'email', 'html', 'xml', 'pickle', 'copy'
-        }
-        return module in stdlib
+            'http', 'urllib', 'email', 'html', 'xml', 'pickle', 'copy',
+            'socket', 'ssl', 'hashlib', 'zlib', 'gzip', 'bz2', 'lzma',
+            'shutil', 'tempfile', 'sysconfig', 'traceback', 'inspect'
+        })
+        return module in stdlib or module.split('.')[0] in stdlib
 
     def _resolve_internal_import(self, module: str) -> Optional[str]:
         """Tente de résoudre un import vers un fichier du projet"""
@@ -99,8 +103,24 @@ class CodeAnalyzer(ast.NodeVisitor):
 
         return None
 
+    def visit_If(self, node):
+        """Détecte les points d'entrée de type if __name__ == '__main__'"""
+        if isinstance(node.test, ast.Compare) and \
+           isinstance(node.test.left, ast.Name) and \
+           node.test.left.id == '__name__' and \
+           len(node.test.ops) == 1 and \
+           isinstance(node.test.ops[0], ast.Eq) and \
+           isinstance(node.test.comparators[0], ast.Constant) and \
+           node.test.comparators[0].value == '__main__':
+            self.analysis.entry_points.append(f"__main__ block (line {node.lineno})")
+        self.generic_visit(node)
+
     def visit_ClassDef(self, node):
         """Capture les classes et leurs méthodes"""
+        # Détection des applications Flask
+        for base in node.bases:
+            if isinstance(base, ast.Name) and base.id == 'Flask':
+                self.analysis.entry_points.append(f"Flask app: {node.name} (line {node.lineno})")
         bases = []
         for b in node.bases:
             if isinstance(b, ast.Name):
@@ -113,7 +133,11 @@ class CodeAnalyzer(ast.NodeVisitor):
             if isinstance(item, ast.FunctionDef):
                 methods.append({
                     'name': item.name,
-                    'args': [arg.arg for arg in item.args.args],
+                    'args': [{
+                        'name': arg.arg,
+                        'type': ast.unparse(arg.annotation) if arg.annotation else None
+                    } for arg in item.args.args],
+                    'return_type': ast.unparse(item.returns) if item.returns else None,
                     'is_async': False
                 })
             elif isinstance(item, ast.AsyncFunctionDef):
@@ -139,7 +163,11 @@ class CodeAnalyzer(ast.NodeVisitor):
         if not isinstance(parent, ast.ClassDef):
             self.functions.append({
                 'name': node.name,
-                'args': [arg.arg for arg in node.args.args],
+                'args': [{
+                    'name': arg.arg,
+                    'type': ast.unparse(arg.annotation) if arg.annotation else None
+                } for arg in node.args.args],
+                'return_type': ast.unparse(node.returns) if node.returns else None,
                 'lineno': node.lineno,
                 'is_async': False,
                 'docstring': ast.get_docstring(node)
@@ -205,7 +233,10 @@ def analyze_project(root_dir: Path, ignore_dirs: Optional[Set[str]] = None) -> D
             'total_files': 0,
             'total_loc': 0,
             'total_classes': 0,
-            'total_functions': 0
+            'total_functions': 0,
+            'entry_points': [],
+            'test_files': 0,
+            'test_coverage': None
         },
         'dependency_graph': defaultdict(set),
         'external_deps': defaultdict(int)
