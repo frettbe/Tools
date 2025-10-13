@@ -1,0 +1,22 @@
+# Project Mapper Configuration File
+ignore_dirs:
+  - '__pycache__'
+  - '.git'
+  - 'venv'
+  - 'env'
+  - 'node_modules'
+  - '.venv'
+  - 'build'
+  - 'dist'
+  - '.pytest_cache'
+  - '.mypy_cache'
+  - 'htmlcov'
+  - '.tox'
+  - '.eggs'
+  - '*.egg-info'
+  - '.vscode'  # Additional directory to ignore
+  - '.idea'    # Additional directory to ignore
+
+output_format: 'markdown'
+default_output_file: 'PROJECT_MAP.md'
+cache_enabled: true
