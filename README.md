@@ -72,19 +72,17 @@ Features:
 - Memory management: optimized for large projects
 
 Usage:
-    # Basic usage
-    python project_mapper_qwenCoder_rev.py
     
     # Custom output and format
-    python project_mapper_qwenCoder_rev.py --output docs/project_map.json --format json
+    --output docs/project_map.json --format json
     
     # With configuration file
-    python project_mapper_qwenCoder_rev.py --config project_mapper.yml *
+    --config project_mapper.yml *
     
     # Include database schema
-    python project_mapper_qwenCoder_rev.py --db data/app.db
+    --db data/app.db
     
     # Multi-language analysis with caching
-    python project_mapper_qwenCoder_rev.py --project /path/to/project --cache-dir .cache --format json --verbose
+    --project /path/to/project --cache-dir .cache --format json --verbose
  
  * see project_mapper.yml for example
